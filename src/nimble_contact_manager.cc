@@ -378,7 +378,8 @@ namespace nimble {
       , contact_faces_search_tree_("contact faces search tree")
 #endif
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
-      , collision_world_(bvh::vt::context::current()->num_ranks() * dicing_factor, bvh::vt::context::current()->num_ranks() * dicing_factor),
+      , collision_world_(bvh::vt::make_collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>(bvh::vt::context::current()->num_ranks() * dicing_factor,
+          bvh::vt::context::current()->num_ranks() * dicing_factor)),
       face_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
       node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor)))
 #endif
@@ -1847,20 +1848,20 @@ namespace
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
     auto node_patches_future = build_patch(node_patch_collection_, contact_nodes_, od_factor);
     
-    auto &world = collision_world_;
+    auto world = collision_world_;
     
     // As soon as the patches have been transferred to a VT collection, start using them to build the trees
-    auto trees_future = face_patches_future.then([&world](auto &&tree_faces){
-      return world.build_trees(std::forward<decltype(tree_faces)>(tree_faces));
+    auto trees_future = face_patches_future.then([world](auto &&tree_faces) mutable {
+      return world->build_trees(std::forward<decltype(tree_faces)>(tree_faces));
     });
     
     // As soon as the trees have completed and the face patches are available, starting to collision
     // tests between the trees and patches
     bvh::vt::collection< bvh::bvh_tree_26d, bvh::vt::index_1d > tree_coll;
-    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([&world, &tree_coll](auto &&tup) {
+    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([world, &tree_coll](auto &&tup) mutable {
       auto node_patches = std::get<1>(std::forward<decltype(tup)>(tup));
       tree_coll = std::get<0>( std::forward<decltype(tup)>(tup));
-      return world.find_collisions(node_patches);
+      return world->find_collisions(node_patches);
     });
     
     // When collisions have been processed, transfer back to a standard vector per rank from a VT collection

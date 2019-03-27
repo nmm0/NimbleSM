@@ -234,7 +234,7 @@ namespace nimble {
     void ContactVisualizationWriteStep(double time_current);
 
 #ifdef NIMBLE_HAVE_BVH
-    void VisualizeCollisionInfo(const bvh::bvh_tree_26d &faces_tree, const bvh::bvh_tree_26d &nodes_tree,
+    void VisualizeCollisionInfo(const bvh::bvh_tree_26d &faces_tree,
                                 const bvh::bvh_tree_26d::collision_query_result_type &collision_result,
                                 int step);
 #endif
@@ -280,7 +280,8 @@ namespace nimble {
 
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
 
-    bvh::vt::collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>  collision_world_;
+    using collision_world_type = bvh::vt::collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>;
+    bvh::vt::global_handle< collision_world_type > collision_world_;
 
     patch_collection face_patch_collection_;
     patch_collection node_patch_collection_;
