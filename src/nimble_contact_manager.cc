@@ -1236,7 +1236,7 @@ namespace
 }
 
   void
-  ContactManager::VisualizeCollisionInfo( const bvh::bvh_tree_26d &faces_tree, const bvh::bvh_tree_26d &nodes_tree,
+  ContactManager::VisualizeCollisionInfo( const bvh::bvh_tree_26d &faces_tree,
                                           const bvh::bvh_tree_26d::collision_query_result_type &collision_result,
                                           int step )
   {
@@ -1245,7 +1245,7 @@ namespace
     for ( auto &&face : contact_faces_ )
     {
       if ( std::count_if( collision_result.begin(), collision_result.end(),
-                          [&face]( auto &&pair ){ return pair.first == face.contact_entity_global_id(); } ) )
+                          [&face]( auto &&pair ){ return pair.second == face.contact_entity_global_id(); } ) )
       {
         colliding_faces.push_back(face);
       } else {
@@ -1266,23 +1266,28 @@ namespace
       }
     }
 
+    int rank = bvh::vt::context::current()->rank();
+
+    std::stringstream colliding_out_name;
+    colliding_out_name << "contact_entities_colliding." << rank << '.';
+
+    std::stringstream noncolliding_out_name;
+    noncolliding_out_name << "contact_entities_noncolliding_." << rank << '.';
+
+    WriteContactEntitiesToVTKFile(colliding_faces, colliding_nodes, colliding_out_name.str(), step);
+    WriteContactEntitiesToVTKFile(noncolliding_faces, noncolliding_nodes, noncolliding_out_name.str(), step);
+
 #ifdef BVH_USE_VTK
     // Visualize bvh trees
-    std::stringstream tree_faces_file_name_ss;
-    tree_faces_file_name_ss << "bvh_tree_faces_" << step << ".vtp";
-    std::ofstream tree_faces_vis_file(tree_faces_file_name_ss.str().c_str());
+    for ( int i = 0; i < faces_tree.depth(); ++i ) {
+      std::stringstream tree_faces_file_name_ss;
+      tree_faces_file_name_ss << "bvh_tree_faces_l" << i << "_" << step << ".vtp";
+      std::ofstream tree_faces_vis_file(tree_faces_file_name_ss.str().c_str());
 
-    bvh::vis::write_bvh( tree_faces_vis_file, faces_tree );
+      bvh::vis::write_bvh_level(tree_faces_vis_file, faces_tree, i);
 
-    tree_faces_vis_file.close();
-
-    std::stringstream tree_nodes_file_name_ss;
-    tree_nodes_file_name_ss << "bvh_tree_nodes_" << step << ".vtp";
-    std::ofstream tree_nodes_vis_file(tree_nodes_file_name_ss.str().c_str());
-
-    bvh::vis::write_bvh( tree_nodes_vis_file, nodes_tree );
-
-    tree_nodes_vis_file.close();
+      tree_faces_vis_file.close();
+    }
 #endif
   }
 #endif
@@ -1718,7 +1723,7 @@ namespace
 
     if ( debug_output )
     {
-      VisualizeCollisionInfo(faces_tree, nodes_tree, collision_results, step);
+      VisualizeCollisionInfo(faces_tree, collision_results, step);
     }
 
 #endif
@@ -1838,23 +1843,24 @@ namespace
       throw std::logic_error("\nError in ComputeParallelContactForce(), invalid penalty_parameter.\n");
     }
     auto od_factor = static_cast<int>(dicing_factor_);
-    
+
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
     auto node_patches_future = build_patch(node_patch_collection_, contact_nodes_, od_factor);
     
     auto &world = collision_world_;
     
     // As soon as the patches have been transferred to a VT collection, start using them to build the trees
-    auto trees_future = node_patches_future.then([&world](auto &&tree_nodes){
-      return world.build_trees(std::forward<decltype(tree_nodes)>(tree_nodes));
-    } );
+    auto trees_future = face_patches_future.then([&world](auto &&tree_faces){
+      return world.build_trees(std::forward<decltype(tree_faces)>(tree_faces));
+    });
     
     // As soon as the trees have completed and the face patches are available, starting to collision
     // tests between the trees and patches
-    auto bpr = bvh::vt::when_all(trees_future, face_patches_future).then([&world](auto &&tup) {
-      auto face_patches = std::get<1>(std::forward<decltype(tup)>(tup));
-      
-      return world.find_collisions(face_patches);
+    bvh::vt::collection< bvh::bvh_tree_26d, bvh::vt::index_1d > tree_coll;
+    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([&world, &tree_coll](auto &&tup) {
+      auto node_patches = std::get<1>(std::forward<decltype(tup)>(tup));
+      tree_coll = std::get<0>( std::forward<decltype(tup)>(tup));
+      return world.find_collisions(node_patches);
     });
     
     // When collisions have been processed, transfer back to a standard vector per rank from a VT collection
@@ -1886,43 +1892,12 @@ namespace
       MPI_Reduce(&ncollisions, &total_num_collisions, 1, MPI_UNSIGNED_LONG_LONG,
           MPI_SUM, 0, MPI_COMM_WORLD );
 
-      if (rank == 0)
-        bvh::vt::print( "num collisions: {}\n", total_num_collisions );
-      //VisualizeCollisionInfo(faces_tree, nodes_tree, collision_results, step);
-      std::vector<ContactEntity> colliding_faces;
-      std::vector<ContactEntity> noncolliding_faces;
-      for ( auto &&face : contact_faces_ )
-      {
-        if ( std::count_if( collision_result.begin(), collision_result.end(),
-                            [&face]( auto &&pair ){ return pair.first == face.contact_entity_global_id(); } ) )
-        {
-          colliding_faces.push_back(face);
-        } else {
-          noncolliding_faces.push_back(face);
-        }
+      if (rank == 0) {
+        bvh::vt::print("step {}: num collisions: {}\n", step, total_num_collisions);
       }
 
-      std::vector<ContactEntity> colliding_nodes;
-      std::vector<ContactEntity> noncolliding_nodes;
-      for ( auto &&node : contact_nodes_ )
-      {
-        if ( std::count_if( collision_result.begin(), collision_result.end(),
-                            [&node]( auto &&pair ){ return pair.first == node.contact_entity_global_id(); } ) )
-        {
-          colliding_nodes.push_back(node);
-        } else {
-          noncolliding_nodes.push_back(node);
-        }
-      }
-
-      std::stringstream colliding_out_name;
-      colliding_out_name << "contact_entities_colliding." << rank << '.';
-
-      std::stringstream noncolliding_out_name;
-      noncolliding_out_name << "contact_entities_noncolliding_." << rank << '.';
-
-      WriteContactEntitiesToVTKFile(colliding_faces, colliding_nodes, colliding_out_name.str(), step);
-      WriteContactEntitiesToVTKFile(noncolliding_faces, noncolliding_nodes, noncolliding_out_name.str(), step);
+      auto faces_tree = bvh::vt::vt_collection_to_mpi<std::vector<bvh::bvh_tree_26d>>(tree_coll).get();
+      VisualizeCollisionInfo(faces_tree.at( 0 ), collision_result, step);
     }
 #endif
   }

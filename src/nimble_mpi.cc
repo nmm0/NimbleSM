@@ -104,12 +104,13 @@ int main(int argc, char *argv[]) {
     throw std::logic_error("\nError:  MPI_Comm_rank() returned nonzero error code.\n");
   }
 
+  int status = 0;
+
 #ifdef NIMBLE_HAVE_BVH
+  {
   auto comm = MPI_COMM_WORLD;
   bvh::vt::context vt_ctx{ argc, argv, &comm };
 #endif
-
-  int status = 0;
 
   // Banner
   if (my_mpi_rank == 0) {
@@ -238,6 +239,11 @@ int main(int argc, char *argv[]) {
 
 #ifdef NIMBLE_HAVE_KOKKOS
   Kokkos::finalize();
+#endif
+
+
+#ifdef NIMBLE_HAVE_BVH
+  }
 #endif
 
   MPI_Finalize();
