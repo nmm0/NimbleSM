@@ -381,10 +381,24 @@ namespace nimble {
       , collision_world_(bvh::vt::make_collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>(bvh::vt::context::current()->num_ranks() * dicing_factor,
           bvh::vt::context::current()->num_ranks() * dicing_factor)),
       face_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
-      node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor)))
+      node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
+      parallel_contact_perf_("ParallelContact")
 #endif
   {
+#if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
+#endif
+  }
 
+  ContactManager::~ContactManager()
+  {
+#if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
+    auto rank = bvh::vt::context::current()->rank();
+    auto num_ranks = bvh::vt::context::current()->num_ranks();
+    std::ostringstream perf_name;
+    perf_name << "perf." << num_ranks << "." << rank << ".log";
+    std::ofstream log(perf_name.str());
+    parallel_contact_perf_.write_to_stream(log);
+#endif
   }
 
   void
@@ -1843,6 +1857,9 @@ namespace
     if (penalty_parameter_ <= 0.0) {
       throw std::logic_error("\nError in ComputeParallelContactForce(), invalid penalty_parameter.\n");
     }
+    
+    auto trace = bvh::debug::start_trace< bvh::debug::timed_trace >( "ParallelContactForce" );
+    
     auto od_factor = static_cast<int>(dicing_factor_);
 
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
@@ -1873,6 +1890,12 @@ namespace
     bvh::vt::debug( "{}: ============begin get results\n", ::vt::theContext()->getNode() );
     results_vec = collision_result_future.get();
     bvh::vt::debug( "{}: ============end get results\n", ::vt::theContext()->getNode() );
+    
+    
+    trace->end();
+  
+    parallel_contact_perf_.log( trace->elapsed() );
+    
     
 #if 1
     
