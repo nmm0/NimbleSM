@@ -379,13 +379,14 @@ namespace nimble {
 #endif
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
       , collision_world_(bvh::vt::make_collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>(bvh::vt::context::current()->num_ranks() * dicing_factor,
-          bvh::vt::context::current()->num_ranks() * dicing_factor)),
+          dicing_factor)),
       face_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
       node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
       parallel_contact_perf_("ParallelContact")
 #endif
   {
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
+    collision_world_->enable_trace();
 #endif
   }
 
@@ -398,6 +399,12 @@ namespace nimble {
     perf_name << "perf." << num_ranks << "." << rank << ".log";
     std::ofstream log(perf_name.str());
     parallel_contact_perf_.write_to_stream(log);
+    log.close();
+
+    std::ostringstream json_name;
+    json_name << "perf." << num_ranks << "." << rank << ".json";
+    std::ofstream json(json_name.str());
+    collision_world_->write_debug_trace(json);
 #endif
   }
 
@@ -1857,7 +1864,7 @@ namespace
     if (penalty_parameter_ <= 0.0) {
       throw std::logic_error("\nError in ComputeParallelContactForce(), invalid penalty_parameter.\n");
     }
-    
+
     auto trace = bvh::debug::start_trace< bvh::debug::timed_trace >( "ParallelContactForce" );
     
     auto od_factor = static_cast<int>(dicing_factor_);
@@ -1920,8 +1927,11 @@ namespace
         bvh::vt::print("step {}: num collisions: {}\n", step, total_num_collisions);
       }
 
-      auto faces_tree = bvh::vt::vt_collection_to_mpi<std::vector<bvh::bvh_tree_26d>>(tree_coll).get();
-      VisualizeCollisionInfo(faces_tree.at( 0 ), collision_result, step);
+      if ( visualize )
+      {
+        auto faces_tree = bvh::vt::vt_collection_to_mpi<std::vector<bvh::bvh_tree_26d>>(tree_coll).get();
+        VisualizeCollisionInfo(faces_tree.at(0), collision_result, step);
+      }
     }
 #endif
   }
