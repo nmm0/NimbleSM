@@ -128,6 +128,8 @@ namespace nimble {
       }
       double coords_[3];
     };
+    
+    static double inflation_factor;
 
     NIMBLE_INLINE_FUNCTION
     ContactEntity() {}
@@ -260,7 +262,7 @@ namespace nimble {
 
     void RecomputeKdop()
     {
-      const double inflation_length = 0.15 * char_len_;
+      const double inflation_length = inflation_factor * char_len_;
       if (entity_type_ == NODE) {
         vertex v;
         v[0] = coord_1_x_;

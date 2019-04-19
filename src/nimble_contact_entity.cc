@@ -45,6 +45,8 @@
 #include "nimble_contact_entity.h"
 
 namespace nimble {
+  
+  double ContactEntity::inflation_factor = 0.15;
 
 #ifdef NIMBLE_HAVE_BVH
   // Free functions for accessing entity info for bvh

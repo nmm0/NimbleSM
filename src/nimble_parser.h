@@ -150,6 +150,9 @@ namespace nimble {
     std::string ContactVisualizationFileName() const {
       return contact_visualization_file_name_;
     }
+    
+    std::size_t ContactDicingFactor() const { return contact_dicing_; }
+    double ContactInflationFactor() const { return contact_inflation_factor_; }
 
     std::string ContactString() const { return contact_string_; }
 
@@ -210,6 +213,8 @@ namespace nimble {
     std::string contact_string_;
     bool visualize_contact_entities_;
     bool visualize_contact_bounding_boxes_;
+    std::size_t contact_dicing_;
+    double contact_inflation_factor_;
     std::string contact_visualization_file_name_;
     std::vector<int> microscale_output_element_ids_;
     std::map<std::string, std::string> material_strings_;

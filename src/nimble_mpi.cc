@@ -263,7 +263,8 @@ int ExplicitTimeIntegrator(nimble::Parser & parser,
   int num_nodes = mesh.GetNumNodes();
   int num_blocks = mesh.GetNumBlocks();
   
-  nimble::ContactManager contact_manager;
+  nimble::ContactEntity::inflation_factor = parser.ContactInflationFactor();
+  nimble::ContactManager contact_manager(parser.ContactDicingFactor());
   
   bool contact_enabled = parser.HasContact();
   bool contact_visualization = parser.ContactVisualization();
@@ -499,6 +500,10 @@ int ExplicitTimeIntegrator(nimble::Parser & parser,
 #ifdef NIMBLE_HAVE_BVH
     if (contact_enabled) {
       contact_manager.ApplyDisplacements(displacement);
+      
+      // TODO: this sync is to accurately measure parallel contact force scaling
+      MPI_Barrier(MPI_COMM_WORLD);
+      
       contact_manager.ComputeParallelContactForce(step+1, is_output_step, contact_visualization);
       contact_manager.GetForces(contact_force);
       if (contact_visualization && is_output_step) {

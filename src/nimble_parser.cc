@@ -180,8 +180,25 @@ namespace nimble {
     ss >> block_id_;
   }
 
-  Parser::Parser() : file_name_("none"), genesis_file_name_("none"),  use_two_level_mesh_decomposition_(false), write_timing_data_file_(false), rve_genesis_file_name_("none"), exodus_file_name_("none"),
-                     time_integration_scheme_("explicit"), nonlinear_solver_relative_tolerance_(1.0e-6), nonlinear_solver_max_iterations_(200), final_time_(1.0), num_load_steps_(0), output_frequency_(1), visualize_contact_entities_(false), visualize_contact_bounding_boxes_(false), contact_visualization_file_name_("none"), microscale_boundary_condition_strategy_("periodic bc") {
+  Parser::Parser()
+    : file_name_("none"),
+      genesis_file_name_("none"), 
+      use_two_level_mesh_decomposition_(false),
+      write_timing_data_file_(false),
+      rve_genesis_file_name_("none"),
+      exodus_file_name_("none"),
+      time_integration_scheme_("explicit"),
+      nonlinear_solver_relative_tolerance_(1.0e-6),
+      nonlinear_solver_max_iterations_(200),
+      final_time_(1.0),
+      num_load_steps_(0),
+      output_frequency_(1),
+      visualize_contact_entities_(false),
+      visualize_contact_bounding_boxes_(false),
+      contact_visualization_file_name_("none"),
+      contact_dicing_(1),
+      contact_inflation_factor_(0.15),
+      microscale_boundary_condition_strategy_("periodic bc") {
     material_strings_["rve"] = "none";
   }
 
@@ -319,6 +336,12 @@ namespace nimble {
           }
 
           contact_visualization_file_name_ = vals[5];
+        }
+        else if (key == "contact dicing") {
+          contact_dicing_ = std::stoll(value);
+        }
+        else if (key == "contact inflation") {
+          contact_inflation_factor_ = std::stod(value);
         }
         else if (key == "microscale output element ids") {
           std::stringstream ss(value);
