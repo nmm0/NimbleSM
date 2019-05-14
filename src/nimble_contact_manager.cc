@@ -360,12 +360,12 @@ namespace nimble {
         for (int i_face = 0 ; i_face < faces.size() ; i_face++) {
           auto &face_global_ids = global_id_map[i_face];
           const auto *mpi_buff_ptr = &mpi_buffer.at(i_mpi_buff_face*num_nodes_in_face);
-          bool found = false;
+          bool found = true;
           for ( int j = 0; j < 4; ++j ) {
             if (std::find_if(face_global_ids.begin(), face_global_ids.end(), [mpi_buff_ptr, j]( auto &&id ) {
                  return id == mpi_buff_ptr[j];
-               } ) != face_global_ids.end() ) {
-              found = true;
+               } ) == face_global_ids.end() ) {
+              found = false;
             }
           }
 
