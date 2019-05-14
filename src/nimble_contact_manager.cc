@@ -351,9 +351,9 @@ namespace nimble {
       int source = ( mpi_rank + num_ranks - shift ) % num_ranks;
       MPI_Sendrecv(&bcast_size, 1, MPI_INT, target, shift, &recv_size, 1, MPI_INT, source, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       std::vector<int> mpi_buffer(recv_size);
-      
+
       MPI_Sendrecv(face_global_ids.data(), face_global_ids.size(), MPI_INT, target, shift, mpi_buffer.data(), mpi_buffer.size(), MPI_INT, source, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      
+
       int mpi_buffer_num_faces = mpi_buffer.size()/num_nodes_in_face;
       auto update_index = mpi_buffer_num_faces / 100;
       for (int i_mpi_buff_face = 0 ; i_mpi_buff_face < mpi_buffer_num_faces ; i_mpi_buff_face++) {
@@ -1854,16 +1854,16 @@ namespace
 
       auto count = size / static_cast<std::size_t>(od_factor);
       auto rem = size % static_cast<std::size_t>(od_factor);
-      
+
       bvh::span< ContactEntity, bvh::dynamic_extent() > sp( &_vec[0], _vec.size() );
-      
+
       if (od < rem) {
         return sp.subspan(od * (count + 1), count + 1);
       } else {
         return sp.subspan(rem + od * count, count);
       }
     }
-    
+
     auto
     build_patch(ContactManager::patch_collection &patch_collection,
                                std::vector<ContactEntity> &entities,
@@ -1871,7 +1871,7 @@ namespace
       // Build patches (averages centroids and builds kdops)
       // od_factor is used for overdecomposition
       // TODO: Use tree splitting metric for splitting patches rather than indices
-      
+
       // Force kdop recomputation
       for ( auto &&ent : entities )
       {
@@ -1886,32 +1886,32 @@ namespace
       {
         patches_vec.emplace_back(i + rank * od_factor, span_for_decomp(i, od_factor, entities));
       }
-      
+
       return bvh::vt::vt_collection_data(patches_vec, patch_collection);
     }
   }
-  
+
   void
   ContactManager::ComputeParallelContactForce(int step, bool is_output_step, bool visualize) {
-    
+    ::vt::theCollective()->barrier();
     if (penalty_parameter_ <= 0.0) {
       throw std::logic_error("\nError in ComputeParallelContactForce(), invalid penalty_parameter.\n");
     }
 
     auto trace = bvh::debug::start_trace< bvh::debug::timed_trace >( "ParallelContactForce" );
-    
+
     auto od_factor = static_cast<int>(dicing_factor_);
 
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
     auto node_patches_future = build_patch(node_patch_collection_, contact_nodes_, od_factor);
-    
+
     auto world = collision_world_;
-    
+
     // As soon as the patches have been transferred to a VT collection, start using them to build the trees
     auto trees_future = face_patches_future.then([world](auto &&tree_faces) mutable {
       return world->build_trees(std::forward<decltype(tree_faces)>(tree_faces));
     });
-    
+
     // As soon as the trees have completed and the face patches are available, starting to collision
     // tests between the trees and patches
     bvh::vt::collection< bvh::bvh_tree_26d, bvh::vt::index_1d > tree_coll;
@@ -1920,7 +1920,7 @@ namespace
       tree_coll = std::get<0>( std::forward<decltype(tup)>(tup));
       return world->find_collisions(node_patches);
     });
-    
+
     // When collisions have been processed, transfer back to a standard vector per rank from a VT collection
     auto collision_result_future = bpr.then([](auto &&results_collection){
       return bvh::vt::vt_collection_to_mpi<std::vector<bvh::bvh_tree_26d::collision_query_result_type>>(results_collection);
@@ -1930,15 +1930,15 @@ namespace
     bvh::vt::debug( "{}: ============begin get results\n", ::vt::theContext()->getNode() );
     results_vec = collision_result_future.get();
     bvh::vt::debug( "{}: ============end get results\n", ::vt::theContext()->getNode() );
-    
-    
+
+
     trace->end();
-  
+
     parallel_contact_perf_.log( trace->elapsed() );
-    
-    
+
+
 #if 1
-    
+
     bvh::bvh_tree_26d::collision_query_result_type collision_result;
 
     for ( const auto &r : results_vec )
