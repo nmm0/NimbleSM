@@ -416,6 +416,10 @@ namespace nimble {
   {
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
     collision_world_->enable_trace();
+    face_patch_collection_.original_offset(bvh::vt::context::current()->rank() * static_cast<int>(dicing_factor));
+    face_patch_collection_.original_size(dicing_factor);
+    node_patch_collection_.original_offset(bvh::vt::context::current()->rank() * static_cast<int>(dicing_factor));
+    node_patch_collection_.original_size(dicing_factor);
 #endif
   }
 
