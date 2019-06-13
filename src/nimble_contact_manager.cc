@@ -432,6 +432,13 @@ namespace nimble {
     json_name << "perf." << num_ranks << "." << rank << ".json";
     std::ofstream json(json_name.str());
     collision_world_->write_debug_trace(json);
+
+    std::ofstream meta_json("meta.json");
+    ::perf::trace::write_meta_json(meta_json, {
+        { "nranks", num_ranks },
+        { "od", static_cast< int >( dicing_factor_ ) }
+    } );
+    collision_world_->write_debug_trace(json);
 #endif
   }
 
