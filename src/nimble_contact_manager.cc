@@ -410,8 +410,7 @@ namespace nimble {
       , collision_world_(bvh::vt::make_collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>(dicing_factor,
           dicing_factor)),
       face_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
-      node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor))),
-      parallel_contact_perf_("ParallelContact")
+      node_patch_collection_(bvh::vt::index_1d(bvh::vt::context::current()->num_ranks() * static_cast<int>(dicing_factor)))
 #endif
   {
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
@@ -428,11 +427,6 @@ namespace nimble {
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
     auto rank = bvh::vt::context::current()->rank();
     auto num_ranks = bvh::vt::context::current()->num_ranks();
-    std::ostringstream perf_name;
-    perf_name << "perf." << num_ranks << "." << rank << ".log";
-    std::ofstream log(perf_name.str());
-    parallel_contact_perf_.write_to_stream(log);
-    log.close();
 
     std::ostringstream json_name;
     json_name << "perf." << num_ranks << "." << rank << ".json";
@@ -1897,25 +1891,29 @@ namespace
     if (penalty_parameter_ <= 0.0) {
       throw std::logic_error("\nError in ComputeParallelContactForce(), invalid penalty_parameter.\n");
     }
-
-    auto trace = bvh::debug::start_trace< bvh::debug::timed_trace >( "ParallelContactForce" );
-
     auto od_factor = static_cast<int>(dicing_factor_);
+
+
+    auto iter_trace = collision_world_->trace_tree().begin_trace< ::perf::trace::iteration_trace >( "iteration", static_cast< std::size_t >( step ) );
 
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
     auto node_patches_future = build_patch(node_patch_collection_, contact_nodes_, od_factor);
 
     auto world = collision_world_;
 
+    ::perf::trace::trace_handle tree_trace;
+
     // As soon as the patches have been transferred to a VT collection, start using them to build the trees
-    auto trees_future = face_patches_future.then([world](auto &&tree_faces) mutable {
+    auto trees_future = face_patches_future.then([world, &tree_trace](auto &&tree_faces) mutable {
+      tree_trace = world->trace_tree().begin_trace< ::perf::trace::timed_trace >( "tree build" );
       return world->build_trees(std::forward<decltype(tree_faces)>(tree_faces));
     });
 
     // As soon as the trees have completed and the face patches are available, starting to collision
     // tests between the trees and patches
     bvh::vt::collection< bvh::bvh_tree_26d, bvh::vt::index_1d > tree_coll;
-    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([world, &tree_coll](auto &&tup) mutable {
+    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([world, &tree_coll, &tree_trace](auto &&tup) mutable {
+      tree_trace.reset();
       auto node_patches = std::get<1>(std::forward<decltype(tup)>(tup));
       tree_coll = std::get<0>( std::forward<decltype(tup)>(tup));
       return world->find_collisions(node_patches);
@@ -1929,13 +1927,10 @@ namespace
     std::vector< bvh::bvh_tree_26d::collision_query_result_type > results_vec(dicing_factor_);
     bvh::vt::debug( "{}: ============begin get results\n", ::vt::theContext()->getNode() );
     results_vec = collision_result_future.get();
+
+    iter_trace.reset();
+
     bvh::vt::debug( "{}: ============end get results\n", ::vt::theContext()->getNode() );
-
-
-    trace->end();
-
-    parallel_contact_perf_.log( trace->elapsed() );
-
 
 #if 1
 

@@ -282,7 +282,6 @@ namespace nimble {
 
     using collision_world_type = bvh::vt::collision_world<bvh::patch<ContactEntity>, bvh::bvh_tree_26d>;
     bvh::vt::global_handle< collision_world_type > collision_world_;
-    bvh::debug::time_log_trace< std::string > parallel_contact_perf_;
 
     patch_collection face_patch_collection_;
     patch_collection node_patch_collection_;
