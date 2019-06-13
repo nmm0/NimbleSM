@@ -436,9 +436,9 @@ namespace nimble {
     std::ofstream meta_json("meta.json");
     ::perf::trace::write_meta_json(meta_json, {
         { "nranks", num_ranks },
-        { "od", static_cast< int >( dicing_factor_ ) }
+        { "od", static_cast< int >( dicing_factor_ ) },
+        { "file_pattern", "perf.{n}.{r}.json" }
     } );
-    collision_world_->write_debug_trace(json);
 #endif
   }
 
