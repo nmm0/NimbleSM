@@ -431,16 +431,19 @@ namespace nimble {
     face_patch_collection_.original_size(dicing_factor);
     node_patch_collection_.original_offset(bvh::vt::context::current()->rank() * static_cast<int>(dicing_factor));
     node_patch_collection_.original_size(dicing_factor);
+
 #ifdef BVH_ENABLE_TRACING
     auto rank = bvh::vt::context::current()->rank();
     auto num_ranks = bvh::vt::context::current()->num_ranks();
 
-    std::ofstream meta_json("meta.json");
-    ::perf::trace::write_meta_json(meta_json, {
-        { "nranks", num_ranks },
-        { "od", static_cast< int >( dicing_factor_ ) },
-        { "file_pattern", "perf.{n}.{r}.json" }
-    } );
+    if ( rank == 0 ) {
+      std::ofstream meta_json("meta.json");
+      ::perf::trace::write_meta_json(meta_json, {
+          {"nranks",       num_ranks},
+          {"od",           static_cast< int >( dicing_factor_ )},
+          {"file_pattern", "perf.{n}.{r}.json"}
+      });
+    }
 #endif
 #endif
   }
