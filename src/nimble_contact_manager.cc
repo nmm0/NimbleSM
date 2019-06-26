@@ -1881,7 +1881,20 @@ namespace
       for ( std::size_t i = 0; i < splits.size() - 1; ++i )
       {
         std::size_t nelements = std::distance(splits[i], splits[i + 1]);
-        bvh::always_assert(nelements > 0, "Number of split elements must be > 0");
+
+        if (nelements <= 0 )
+        {
+          std::cerr << rank << ": Number of split elements must be > 0\n";
+          std::cerr << rank << ": Total num elements: " << entities.size() << '\n';
+
+          for ( std::size_t j = 0; j < splits.size() - 1; ++j )
+          {
+            std::cerr << rank << ": Split num: " << std::distance(splits[j], splits[j+1]) << '\n';
+          }
+
+          bvh::abort( "Assertion failure" );
+        }
+
         patches_vec.emplace_back(i + rank * od_factor, bvh::span< ContactEntity >(&(*splits[i]), nelements));
       }
 
