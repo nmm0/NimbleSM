@@ -60,6 +60,11 @@
   #include <bvh/tree.hpp>
   #include <bvh/vis/vis_bvh.hpp>
   #include <bvh/patch.hpp>
+  #include <bvh/split/axis.hpp>
+  #include <bvh/split/split.hpp>
+  #include <bvh/split/mean.hpp>
+  #include <bvh/range.hpp>
+  #include <bvh/util/bits.hpp>
 #ifdef NIMBLE_HAVE_MPI
   #include <bvh/vt/mpi_interop.hpp>
   #include <bvh/vt/broadphase.hpp>
@@ -1848,26 +1853,9 @@ namespace
 #if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
   namespace
   {
-    bvh::span< ContactEntity, bvh::dynamic_extent() >
-    span_for_decomp(int od, int od_factor, std::vector<ContactEntity> &_vec)
-    {
-      auto size = _vec.size();
-
-      auto count = size / static_cast<std::size_t>(od_factor);
-      auto rem = size % static_cast<std::size_t>(od_factor);
-
-      bvh::span< ContactEntity, bvh::dynamic_extent() > sp( &_vec[0], _vec.size() );
-
-      if (od < rem) {
-        return sp.subspan(od * (count + 1), count + 1);
-      } else {
-        return sp.subspan(rem + od * count, count);
-      }
-    }
-
     auto
     build_patch(ContactManager::patch_collection &patch_collection,
-                               std::vector<ContactEntity> &entities,
+                               std::vector<ContactEntity> entities,
                                int od_factor) {
       // Build patches (averages centroids and builds kdops)
       // od_factor is used for overdecomposition
@@ -1881,11 +1869,14 @@ namespace
 
       int rank = bvh::vt::context::current()->rank();
 
+      int depth = bvh::bit_log2( od_factor );
+      auto splits = bvh::split_in_place_recursive< bvh::split::mean, bvh::axis::longest >( bvh::make_range( entities.begin(), entities.end() ), depth );
+
       std::vector< bvh::patch< ContactEntity > >  patches_vec;
       patches_vec.reserve( static_cast< std::size_t >( od_factor ) );
-      for ( int i = 0; i < od_factor; ++i )
+      for ( std::size_t i = 0; i < splits.size() - 1; ++i )
       {
-        patches_vec.emplace_back(i + rank * od_factor, span_for_decomp(i, od_factor, entities));
+        patches_vec.emplace_back(i + rank * od_factor, bvh::span< ContactEntity >( &(*splits[i]), std::distance(splits[i], splits[i + 1])));
       }
 
       return bvh::vt::vt_collection_data(patches_vec, patch_collection);
