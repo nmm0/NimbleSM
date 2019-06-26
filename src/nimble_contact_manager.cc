@@ -395,8 +395,15 @@ namespace nimble {
       if ( !remove_entity_ids_hash[i] )
         new_entity_ids.emplace_back( entity_ids[i] );
     }
-    std::cout << "Removed " << remove_face_hash.size() - new_faces.size() << " faces\n";
-    std::cout << "Removed " << remove_entity_ids_hash.size() - new_entity_ids.size() << " faces\n";
+    std::cout << mpi_rank << ": Removed " << remove_face_hash.size() - new_faces.size() << " faces\n";
+    std::cout << mpi_rank << ": Removed " << remove_entity_ids_hash.size() - new_entity_ids.size() << " faces\n";
+
+    if ( new_faces.empty() )
+      std::cout << mpi_rank << ": WARNING: all faces were removed\n";
+
+    if ( new_entity_ids.empty() )
+      std::cout << mpi_rank << ": WARNING: all faces were removed\n";
+
     std::swap(new_faces, faces);
     std::swap(new_entity_ids, entity_ids);
 
