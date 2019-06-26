@@ -429,7 +429,7 @@ namespace nimble {
 
   ContactManager::~ContactManager()
   {
-#if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH)
+#if defined(NIMBLE_HAVE_MPI) && defined(NIMBLE_HAVE_BVH) && defined(BVH_ENABLE_TRACING)
     auto rank = bvh::vt::context::current()->rank();
     auto num_ranks = bvh::vt::context::current()->num_ranks();
 
@@ -1891,27 +1891,42 @@ namespace
     }
     auto od_factor = static_cast<int>(dicing_factor_);
 
-
+#ifdef BVH_ENABLE_TRACING
     auto iter_trace = collision_world_->trace_tree().begin_trace< ::perf::trace::iteration_trace >( "iteration", static_cast< std::size_t >( step ) );
+#endif
 
     auto face_patches_future = build_patch(face_patch_collection_, contact_faces_, od_factor);
     auto node_patches_future = build_patch(node_patch_collection_, contact_nodes_, od_factor);
 
     auto world = collision_world_;
 
+#ifdef BVH_ENABLE_TRACING
     ::perf::trace::trace_handle tree_trace;
+#endif
 
     // As soon as the patches have been transferred to a VT collection, start using them to build the trees
-    auto trees_future = face_patches_future.then([world, &tree_trace](auto &&tree_faces) mutable {
+    auto trees_future = face_patches_future.then([world
+#ifdef BVH_ENABLE_TRACING
+                                                  , &tree_trace
+#endif
+                                                  ](auto &&tree_faces) mutable {
+#ifdef BVH_ENABLE_TRACING
       tree_trace = world->trace_tree().begin_trace< ::perf::trace::timed_trace >( "tree build" );
+#endif
       return world->build_trees(std::forward<decltype(tree_faces)>(tree_faces));
     });
 
     // As soon as the trees have completed and the face patches are available, starting to collision
     // tests between the trees and patches
     bvh::vt::collection< bvh::bvh_tree_26d, bvh::vt::index_1d > tree_coll;
-    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([world, &tree_coll, &tree_trace](auto &&tup) mutable {
+    auto bpr = bvh::vt::when_all(trees_future, node_patches_future).then([world, &tree_coll
+#ifdef BVH_ENABLE_TRACING
+                                                                          , &tree_trace
+#endif
+                                                                          ](auto &&tup) mutable {
+#ifdef BVH_ENABLE_TRACING
       tree_trace.reset();
+#endif
       auto node_patches = std::get<1>(std::forward<decltype(tup)>(tup));
       tree_coll = std::get<0>( std::forward<decltype(tup)>(tup));
       return world->find_collisions(node_patches);
@@ -1926,7 +1941,9 @@ namespace
     bvh::vt::debug( "{}: ============begin get results\n", ::vt::theContext()->getNode() );
     results_vec = collision_result_future.get();
 
+#ifdef BVH_ENABLE_TRACING
     iter_trace.reset();
+#endif
 
     bvh::vt::debug( "{}: ============end get results\n", ::vt::theContext()->getNode() );
 
