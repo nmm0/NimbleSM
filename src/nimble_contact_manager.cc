@@ -424,6 +424,17 @@ namespace nimble {
     face_patch_collection_.original_size(dicing_factor);
     node_patch_collection_.original_offset(bvh::vt::context::current()->rank() * static_cast<int>(dicing_factor));
     node_patch_collection_.original_size(dicing_factor);
+#ifdef BVH_ENABLE_TRACING
+    auto rank = bvh::vt::context::current()->rank();
+    auto num_ranks = bvh::vt::context::current()->num_ranks();
+
+    std::ofstream meta_json("meta.json");
+    ::perf::trace::write_meta_json(meta_json, {
+        { "nranks", num_ranks },
+        { "od", static_cast< int >( dicing_factor_ ) },
+        { "file_pattern", "perf.{n}.{r}.json" }
+    } );
+#endif
 #endif
   }
 
@@ -437,13 +448,6 @@ namespace nimble {
     json_name << "perf." << num_ranks << "." << rank << ".json";
     std::ofstream json(json_name.str());
     collision_world_->write_debug_trace(json);
-
-    std::ofstream meta_json("meta.json");
-    ::perf::trace::write_meta_json(meta_json, {
-        { "nranks", num_ranks },
-        { "od", static_cast< int >( dicing_factor_ ) },
-        { "file_pattern", "perf.{n}.{r}.json" }
-    } );
 #endif
   }
 
@@ -1876,7 +1880,9 @@ namespace
       patches_vec.reserve( static_cast< std::size_t >( od_factor ) );
       for ( std::size_t i = 0; i < splits.size() - 1; ++i )
       {
-        patches_vec.emplace_back(i + rank * od_factor, bvh::span< ContactEntity >( &(*splits[i]), std::distance(splits[i], splits[i + 1])));
+        std::size_t nelements = std::distance(splits[i], splits[i + 1]);
+        bvh::always_assert(nelements > 0, "Number of split elements must be > 0");
+        patches_vec.emplace_back(i + rank * od_factor, bvh::span< ContactEntity >(&(*splits[i]), nelements));
       }
 
       return bvh::vt::vt_collection_data(patches_vec, patch_collection);
