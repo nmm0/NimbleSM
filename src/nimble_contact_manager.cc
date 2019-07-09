@@ -1895,6 +1895,8 @@ namespace
         patches_vec.emplace_back(i + rank * od_factor, bvh::span< ContactEntity >(&(*splits[i]), nelements));
       }
 
+      bvh::always_assert( patches_vec.size() == od_factor, "error during splitting process, splits do not match od factor\n" );
+
       return bvh::vt::vt_collection_data(patches_vec, patch_collection);
     }
   }
